@@ -12,15 +12,12 @@
   };
   const IMAGE_FETCH_TIMEOUT_MS = 2600;
 
-  // Phaser 在某些环境对 data: 图片会出现加载兼容问题，这里改为同源静态占位图。
-  const PLACEHOLDER_DATA_URL = "./icons/icon-192.png";
-
   const TYPE_CONFIG = {
     stars: {
       label: "明星帅哥",
       sizePx: 170,
-      minSpeed: 70,
-      maxSpeed: 115,
+      minSpeed: 26,
+      maxSpeed: 48,
       scoreMin: 150,
       scoreMax: 300,
       pullSpeed: 240,
@@ -29,18 +26,18 @@
     hamster: {
       label: "我的仓鼠",
       sizePx: 92,
-      minSpeed: 190,
-      maxSpeed: 280,
+      minSpeed: 85,
+      maxSpeed: 145,
       scoreMin: 80,
       scoreMax: 120,
-      pullSpeed: 340,
+      pullSpeed: 300,
       radiusMul: 0.38
     },
     ugly: {
       label: "丑男",
       sizePx: 210,
-      minSpeed: 35,
-      maxSpeed: 65,
+      minSpeed: 18,
+      maxSpeed: 32,
       scoreMin: -200,
       scoreMax: -50,
       pullSpeed: 110,
@@ -49,8 +46,8 @@
     mystery: {
       label: "隐藏问号箱",
       sizePx: 130,
-      minSpeed: 230,
-      maxSpeed: 350,
+      minSpeed: 120,
+      maxSpeed: 185,
       scoreMin: 0,
       scoreMax: 0,
       pullSpeed: 260,
@@ -59,11 +56,11 @@
     husband: {
       label: "我老公",
       sizePx: 108,
-      minSpeed: 330,
-      maxSpeed: 460,
+      minSpeed: 170,
+      maxSpeed: 240,
       scoreMin: 500,
       scoreMax: 1000,
-      pullSpeed: 430,
+      pullSpeed: 360,
       radiusMul: 0.38
     }
   };
@@ -98,10 +95,10 @@
 
   function getPlaceholderMap() {
     return {
-      stars: PLACEHOLDER_DATA_URL,
-      hamster: PLACEHOLDER_DATA_URL,
-      ugly: PLACEHOLDER_DATA_URL,
-      husband: PLACEHOLDER_DATA_URL
+      stars: null,
+      hamster: null,
+      ugly: null,
+      husband: null
     };
   }
 
@@ -118,16 +115,16 @@
       });
       clearTimeout(timeoutId);
 
-      if (!response.ok) return PLACEHOLDER_DATA_URL;
+      if (!response.ok) return null;
       const blob = await response.blob();
-      if (!blob || !String(blob.type || "").startsWith("image/")) return PLACEHOLDER_DATA_URL;
+      if (!blob || !String(blob.type || "").startsWith("image/")) return null;
 
       const objectUrl = URL.createObjectURL(blob);
       objectUrls.push(objectUrl);
       return objectUrl;
     } catch {
       clearTimeout(timeoutId);
-      return PLACEHOLDER_DATA_URL;
+      return null;
     }
   }
 
@@ -159,15 +156,17 @@
       this.minRopeLen = 70;
       this.maxRopeLen = 540;
       this.hookAngle = -65;
-      this.swingSpeed = 75;
+      this.swingSpeed = 56;
       this.swingDir = 1;
       this.hookRadius = 10;
       this.hookState = "swing";
-      this.extendSpeed = 760;
-      this.retractSpeed = 420;
+      this.extendSpeed = 650;
+      this.retractSpeed = 360;
       this.currentRetractSpeed = 420;
       this.caughtTarget = null;
       this.shotMissed = false;
+      this.failedTextureKeys = new Set();
+      this.rescuedHusbandCount = 0;
     }
 
     launchHook() {
@@ -190,28 +189,28 @@
       this.minRopeLen = 70;
       this.maxRopeLen = 540;
       this.hookAngle = -65;
-      this.swingSpeed = 75;
+      this.swingSpeed = 56;
       this.swingDir = 1;
       this.hookRadius = 10;
       this.hookState = "swing";
-      this.extendSpeed = 760;
-      this.retractSpeed = 420;
+      this.extendSpeed = 650;
+      this.retractSpeed = 360;
       this.currentRetractSpeed = 420;
       this.caughtTarget = null;
       this.shotMissed = false;
+      this.failedTextureKeys = new Set();
+      this.rescuedHusbandCount = 0;
     }
 
     preload() {
-      // 先加载 4 个本地兜底纹理，确保任何云图失败都不会出现黑绿缺图方块。
-      this.load.image("fallback_stars", PLACEHOLDER_DATA_URL);
-      this.load.image("fallback_hamster", PLACEHOLDER_DATA_URL);
-      this.load.image("fallback_ugly", PLACEHOLDER_DATA_URL);
-      this.load.image("fallback_husband", PLACEHOLDER_DATA_URL);
+      this.load.on("loaderror", (file) => {
+        if (file?.key) this.failedTextureKeys.add(file.key);
+      });
 
-      this.load.image("stars", this.images.stars);
-      this.load.image("hamster", this.images.hamster);
-      this.load.image("ugly", this.images.ugly);
-      this.load.image("husband", this.images.husband);
+      if (this.images.stars) this.load.image("stars", this.images.stars);
+      if (this.images.hamster) this.load.image("hamster", this.images.hamster);
+      if (this.images.ugly) this.load.image("ugly", this.images.ugly);
+      if (this.images.husband) this.load.image("husband", this.images.husband);
     }
 
     create() {
@@ -228,11 +227,16 @@
 
       this.createBackdrop(w, h);
       this.createMysteryBoxTexture();
+      this.createFallbackTexture("fallback_stars", 0xff7eb6, "帅");
+      this.createFallbackTexture("fallback_hamster", 0xffb46f, "鼠");
+      this.createFallbackTexture("fallback_ugly", 0x9a9a9a, "丑");
+      this.createFallbackTexture("fallback_husband", 0x80d9ff, "老");
 
       this.ropeGraphics = this.add.graphics();
       this.hookHead = this.add.circle(this.anchorX, this.anchorY + this.ropeLen, this.hookRadius, 0xffffff);
       this.hookHead.setStrokeStyle(2, 0x9a2f86, 1);
       this.anchorDot = this.add.circle(this.anchorX, this.anchorY, 12, 0xffa9d1).setStrokeStyle(2, 0x9a2f86, 1);
+      this.pileMark = this.add.rectangle(this.anchorX, this.anchorY + 18, 16, 28, 0x8d5a30, 0.95).setDepth(4);
 
       this.spawnInitialTargets();
       this.bindInput();
@@ -273,6 +277,34 @@
       g.destroy();
     }
 
+    createFallbackTexture(key, color, text) {
+      const size = 110;
+      const g = this.add.graphics();
+      g.fillStyle(color, 1);
+      g.fillRoundedRect(0, 0, size, size, 22);
+      g.lineStyle(4, 0xffffff, 1);
+      g.strokeRoundedRect(0, 0, size, size, 22);
+      g.generateTexture(key, size, size);
+      g.destroy();
+
+      const rt = this.make.renderTexture({ width: size, height: size, add: false });
+      const base = this.add.image(size / 2, size / 2, key).setVisible(false);
+      rt.draw(base, size / 2, size / 2);
+      base.destroy();
+
+      const txt = this.add.text(0, 0, text, {
+        fontFamily: "Microsoft YaHei",
+        fontSize: "46px",
+        color: "#ffffff",
+        fontStyle: "bold"
+      }).setOrigin(0.5).setVisible(false);
+      rt.draw(txt, size / 2, size / 2);
+      txt.destroy();
+
+      rt.saveTexture(key);
+      rt.destroy();
+    }
+
     bindInput() {
       this.input.on("pointerdown", () => this.launchHook());
       this.input.on("gameobjectdown", () => this.launchHook());
@@ -299,7 +331,7 @@
 
       // 高速目标定时改变方向，制造不规则轨迹。
       this.turnEvent = this.time.addEvent({
-        delay: 580,
+        delay: 900,
         loop: true,
         callback: () => {
           for (const t of this.targets) {
@@ -308,7 +340,7 @@
             if (type !== "mystery" && type !== "husband") continue;
 
             const cfg = TYPE_CONFIG[type];
-            this.setRandomVelocity(t, cfg.minSpeed, cfg.maxSpeed);
+            this.setGoldMinerStyleVelocity(t, type, cfg.minSpeed, cfg.maxSpeed);
           }
         }
       });
@@ -316,9 +348,9 @@
 
     spawnInitialTargets() {
       // 控制总对象数量，降低低内存设备的 GC 压力。
-      this.spawnTarget("stars", 3);
-      this.spawnTarget("hamster", 5);
-      this.spawnTarget("ugly", 2);
+      this.spawnTarget("stars", 4);
+      this.spawnTarget("hamster", 4);
+      this.spawnTarget("ugly", 3);
       this.spawnTarget("mystery", 1);
     }
 
@@ -343,7 +375,7 @@
         const bodyRadius = Math.max(12, Math.floor(Math.min(sprite.displayWidth, sprite.displayHeight) * cfg.radiusMul));
         sprite.body.setCircle(bodyRadius);
 
-        this.setRandomVelocity(sprite, cfg.minSpeed, cfg.maxSpeed);
+        this.setGoldMinerStyleVelocity(sprite, type, cfg.minSpeed, cfg.maxSpeed);
 
         this.targets.push(sprite);
       }
@@ -356,6 +388,7 @@
     }
 
     isTextureUsable(key) {
+      if (this.failedTextureKeys.has(key)) return false;
       if (!this.textures.exists(key)) return false;
       const tex = this.textures.get(key);
       if (!tex || tex.key === "__MISSING") return false;
@@ -405,10 +438,14 @@
       };
     }
 
-    setRandomVelocity(sprite, min, max) {
+    setGoldMinerStyleVelocity(sprite, type, min, max) {
       const speed = Phaser.Math.Between(min, max);
-      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      sprite.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+      // 参考黄金矿工：物体左右移动为主，垂直位移很小。
+      const dir = Phaser.Math.Between(0, 1) ? 1 : -1;
+      const yJitter = (type === "mystery" || type === "husband")
+        ? Phaser.Math.Between(-18, 18)
+        : Phaser.Math.Between(-6, 6);
+      sprite.setVelocity(speed * dir, yJitter);
     }
 
     update(_, dtMs) {
@@ -507,9 +544,26 @@
       }
 
       this.score += score;
+      if (type === "husband") {
+        this.placeHusbandNearPile(target.texture.key);
+      }
 
       const sign = score >= 0 ? "+" : "";
       setMessage(`${label} ${sign}${score}`);
+    }
+
+    placeHusbandNearPile(textureKey) {
+      const idx = this.rescuedHusbandCount;
+      const col = idx % 4;
+      const row = Math.floor(idx / 4);
+      const x = this.anchorX + 48 + col * 34;
+      const y = this.anchorY + 28 + row * 34;
+
+      const trophy = this.add.image(x, y, textureKey);
+      this.fitSpriteToSize(trophy, 30);
+      trophy.setDepth(6);
+      trophy.setAlpha(0.96);
+      this.rescuedHusbandCount += 1;
     }
 
     trimTargets() {
@@ -523,7 +577,8 @@
       if (!this.targets.some((t) => t.active && t.getData("type") === "stars")) {
         this.spawnTarget("stars", 1);
       }
-      if (!this.targets.some((t) => t.active && t.getData("type") === "mystery") && Phaser.Math.Between(0, 100) < 24) {
+      // 隐藏款数量比其他目标少：刷新概率显著降低。
+      if (!this.targets.some((t) => t.active && t.getData("type") === "mystery") && Phaser.Math.Between(0, 100) < 7) {
         this.spawnTarget("mystery", 1);
       }
     }
@@ -596,7 +651,7 @@
     const objectUrls = [];
     const images = await buildImageSources(gid, objectUrls);
 
-    if (Object.values(images).every((v) => v === PLACEHOLDER_DATA_URL)) {
+    if (Object.values(images).every((v) => !v)) {
       setMessage("云图较慢，已使用占位图先开局");
     }
 
