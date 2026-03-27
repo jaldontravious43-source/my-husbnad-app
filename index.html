@@ -1,0 +1,199 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ff6fb0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="老公别跑" />
+  <title>老公别跑</title>
+  <link rel="manifest" href="./manifest.json" />
+  <style>
+    :root {
+      --bg-a: #ffd8ea;
+      --bg-b: #efc4ff;
+      --panel: rgba(255,255,255,0.86);
+      --line: rgba(123, 42, 120, 0.2);
+      --text: #3e2139;
+      --brand: #ec4b8f;
+      --brand-2: #8c2f86;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 16%, rgba(255,255,255,0.72), transparent 30%),
+        radial-gradient(circle at 88% 78%, rgba(255,255,255,0.62), transparent 30%),
+        linear-gradient(160deg, var(--bg-a), var(--bg-b));
+    }
+
+    main {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+
+    .card {
+      width: min(720px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 12px 36px rgba(62, 33, 57, 0.18);
+      padding: 16px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(24px, 5.6vw, 36px);
+      color: #7a286f;
+    }
+
+    p {
+      margin: 0 0 10px;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px;
+    }
+
+    .row input {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      width: 100%;
+      font-size: 14px;
+      min-height: 38px;
+    }
+
+    .actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button, a.btn {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      min-height: 40px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #fff;
+      text-decoration: none;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ghost {
+      color: var(--brand-2);
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    #status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #6f2a66;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .tip {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid var(--line);
+      font-size: 13px;
+    }
+
+    @media (max-width: 640px) {
+      .row { grid-template-columns: 1fr; }
+      button, a.btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>老公别跑</h1>
+      <p>先去上传 4 张专属图片，然后把生成的 <code>gid</code> 填进来即可开玩。</p>
+      <p>推荐在 iPhone 的 Safari 打开后，点击“分享” -> “添加到主屏幕”。</p>
+
+      <div class="row">
+        <label for="gid">游戏ID (gid)</label>
+        <input id="gid" placeholder="粘贴你的 UUID" />
+      </div>
+
+      <div class="actions">
+        <button id="startBtn" type="button">进入游戏</button>
+        <a class="btn ghost" href="./upload.html">上传管理页</a>
+      </div>
+
+      <div id="status">等待输入 gid...</div>
+
+      <div class="tip">
+        iPhone 省内存说明：本应用仅缓存页面壳资源，不缓存你上传的人物图片；人物图每次按链接从 Supabase 拉取。
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const gidInput = document.getElementById("gid");
+    const statusEl = document.getElementById("status");
+    const startBtn = document.getElementById("startBtn");
+
+    // 从 URL 自动回填 gid，方便二次打开时快速继续。
+    const existingGid = new URLSearchParams(location.search).get("gid") || "";
+    if (existingGid) {
+      gidInput.value = existingGid;
+      statusEl.textContent = "已从链接中读取 gid，可直接开始。";
+    }
+
+    startBtn.addEventListener("click", () => {
+      const gid = gidInput.value.trim();
+      if (!gid) {
+        statusEl.textContent = "请先输入 gid（可从上传页复制）。";
+        return;
+      }
+
+      location.href = `./game.html?gid=${encodeURIComponent(gid)}`;
+    });
+
+    // PWA 注册：仅缓存应用壳资源，避免占用过多手机空间。
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", async () => {
+        try {
+          await navigator.serviceWorker.register("./sw.js");
+          statusEl.textContent += "\nPWA 已就绪，可添加到主屏幕。";
+        } catch (err) {
+          statusEl.textContent += `\nService Worker 注册失败：${String(err.message || err)}`;
+        }
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,467 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>老公别跑 - 图片上传管理</title>
+  <style>
+    :root {
+      --bg-a: #ffd6e8;
+      --bg-b: #f8c8ff;
+      --panel: rgba(255, 255, 255, 0.85);
+      --text: #47263d;
+      --accent: #ff4d8d;
+      --accent-2: #7a2f8f;
+      --ok: #11884b;
+      --warn: #9d1a49;
+      --line: rgba(122, 47, 143, 0.2);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 15%, rgba(255,255,255,0.65), transparent 38%),
+        radial-gradient(circle at 90% 80%, rgba(255,255,255,0.55), transparent 30%),
+        linear-gradient(145deg, var(--bg-a), var(--bg-b));
+      display: grid;
+      place-items: center;
+      padding: 16px;
+    }
+
+    .wrap {
+      width: min(980px, 100%);
+      background: var(--panel);
+      backdrop-filter: blur(4px);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 12px 36px rgba(71, 38, 61, 0.18);
+      padding: 18px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(22px, 4.8vw, 34px);
+      line-height: 1.2;
+    }
+
+    .desc {
+      margin: 0 0 14px;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 130px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 10px;
+    }
+
+    .row label {
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .row input[type="text"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 9px 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 13px;
+      min-height: 40px;
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      color: var(--accent-2);
+    }
+
+    .preview {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: 10px;
+      object-fit: cover;
+      border: 1px dashed var(--line);
+      background: #fff;
+      margin-bottom: 8px;
+    }
+
+    .hint {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-top: 6px;
+    }
+
+    .actions {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 13px;
+      background: #fff;
+      border: 1px solid var(--line);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .status.ok {
+      border-color: rgba(17, 136, 75, 0.28);
+      color: var(--ok);
+    }
+
+    .status.warn {
+      border-color: rgba(157, 26, 73, 0.28);
+      color: var(--warn);
+    }
+
+    .result {
+      margin-top: 12px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .result a {
+      color: var(--accent-2);
+      font-weight: 700;
+    }
+
+    @media (max-width: 760px) {
+      .row { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>老公别跑 · 图片上传管理页</h1>
+    <p class="desc">上传 4 张定制图片后，自动生成专属 gameId 和分享链接。图片会上传到 Supabase 的 <b>game-images</b> Bucket。</p>
+
+    <section class="meta">
+      <div class="row">
+        <label for="gameId">专属 Game ID</label>
+        <input id="gameId" type="text" readonly />
+        <button id="regenBtn" class="btn" type="button">重新生成</button>
+      </div>
+      <div class="row">
+        <label for="baseUrl">分享域名</label>
+        <input id="baseUrl" type="text" placeholder="https://你的域名" />
+        <button id="fillOriginBtn" class="btn" type="button">使用当前域名</button>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>明星帅哥（stars.png）</h2>
+        <img id="preview-stars" class="preview" alt="明星帅哥预览" />
+        <input id="file-stars" type="file" accept="image/*" />
+        <p class="hint">建议透明背景 PNG；推荐尺寸 512x512 以内，减轻 iPhone 内存压力。</p>
+      </article>
+
+      <article class="card">
+        <h2>我的仓鼠（hamster.png）</h2>
+        <img id="preview-hamster" class="preview" alt="仓鼠预览" />
+        <input id="file-hamster" type="file" accept="image/*" />
+        <p class="hint">小体积目标建议图像简单，提升运行流畅度。</p>
+      </article>
+
+      <article class="card">
+        <h2>丑男（ugly.png）</h2>
+        <img id="preview-ugly" class="preview" alt="丑男预览" />
+        <input id="file-ugly" type="file" accept="image/*" />
+        <p class="hint">大体积目标请避免超大文件，建议单图小于 500KB。</p>
+      </article>
+
+      <article class="card">
+        <h2>我老公（husband.png）</h2>
+        <img id="preview-husband" class="preview" alt="我老公预览" />
+        <input id="file-husband" type="file" accept="image/*" />
+        <p class="hint">隐藏款开箱后显示该图，建议视觉最醒目。</p>
+      </article>
+    </section>
+
+    <section class="actions">
+      <button id="uploadBtn" class="btn" type="button">开始上传并生成链接</button>
+      <button id="copyBtn" class="btn" type="button" disabled>复制分享链接</button>
+    </section>
+
+    <div id="status" class="status">等待上传...</div>
+    <pre id="result" class="result" hidden></pre>
+  </main>
+
+  <!-- Supabase JS SDK v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // ====== 基础配置（已按你提供的信息预填） ======
+    const SUPABASE_URL = "https://bkhccodrqyiesweghhsc.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_vqG9GOJ8TLuhXAhCb2rZ5w_fRTbmSnN";
+    const BUCKET = "game-images";
+
+    // 默认占位图：用内联 SVG，避免额外请求，首屏更轻量。
+    const PLACEHOLDER =
+      "data:image/svg+xml;utf8," +
+      encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="450"><rect width="100%" height="100%" fill="#fff5fb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#b9508d" font-size="32" font-family="sans-serif">等待上传图片</text></svg>');
+
+    // 4 类资源配置：key 决定输入框与路径名，fileName 决定上传后的固定命名。
+    const TYPES = [
+      { key: "stars", fileName: "stars.png", label: "明星帅哥" },
+      { key: "hamster", fileName: "hamster.png", label: "我的仓鼠" },
+      { key: "ugly", fileName: "ugly.png", label: "丑男" },
+      { key: "husband", fileName: "husband.png", label: "我老公" }
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    const statusEl = $("status");
+    const resultEl = $("result");
+    const gameIdEl = $("gameId");
+    const baseUrlEl = $("baseUrl");
+    const copyBtn = $("copyBtn");
+
+    // 初始化 Supabase 客户端。
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 当前分享链接会在上传成功后更新。
+    let shareLink = "";
+
+    // 初始化页面：生成 gameId、默认域名、预览占位图。
+    function initPage() {
+      gameIdEl.value = crypto.randomUUID();
+      baseUrlEl.value = window.location.origin && window.location.origin !== "null"
+        ? window.location.origin
+        : "https://你的域名";
+
+      TYPES.forEach((t) => {
+        const preview = $(`preview-${t.key}`);
+        preview.src = PLACEHOLDER;
+      });
+    }
+
+    // 统一状态提示函数。
+    function setStatus(text, type = "") {
+      statusEl.textContent = text;
+      statusEl.className = "status" + (type ? ` ${type}` : "");
+    }
+
+    // 读取本地图片并实时预览。
+    function bindPreviewEvents() {
+      TYPES.forEach((t) => {
+        const input = $(`file-${t.key}`);
+        const preview = $(`preview-${t.key}`);
+
+        input.addEventListener("change", () => {
+          const file = input.files?.[0];
+          if (!file) {
+            preview.src = PLACEHOLDER;
+            return;
+          }
+
+          if (!file.type.startsWith("image/")) {
+            input.value = "";
+            preview.src = PLACEHOLDER;
+            setStatus(`${t.label} 不是图片文件，请重新选择。`, "warn");
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = () => { preview.src = String(reader.result); };
+          reader.readAsDataURL(file);
+        });
+      });
+    }
+
+    // 策略 A 的关键点：先匿名登录，再执行上传。
+    // 这样你可以在 Supabase Policy 中限制 "authenticated" 才能写。
+    async function ensureAnonymousAuth() {
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      if (sessionData?.session) return;
+
+      const { error } = await supabaseClient.auth.signInAnonymously();
+      if (error) throw new Error(`匿名登录失败：${error.message}`);
+    }
+
+    // 将任意图片转成 PNG Blob，确保最终文件命名和格式统一。
+    async function normalizeToPng(file) {
+      const bitmap = await createImageBitmap(file);
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext("2d", { alpha: true });
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
+
+      return await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("图片转换 PNG 失败"));
+            return;
+          }
+          resolve(blob);
+        }, "image/png");
+      });
+    }
+
+    // 执行上传：严格固定路径 ${gameId}/xxx.png
+    async function uploadAll() {
+      const gameId = gameIdEl.value.trim();
+      const baseUrl = baseUrlEl.value.trim();
+
+      if (!gameId) throw new Error("gameId 为空，请重新生成后再试");
+      if (!baseUrl) throw new Error("请填写分享域名，例如 https://xxx.vercel.app");
+
+      for (const t of TYPES) {
+        const input = $(`file-${t.key}`);
+        const file = input.files?.[0];
+        if (!file) throw new Error(`请先选择：${t.label}`);
+      }
+
+      setStatus("正在匿名登录并上传图片，请稍等...", "");
+      await ensureAnonymousAuth();
+
+      const publicUrls = {};
+
+      for (const t of TYPES) {
+        const input = $(`file-${t.key}`);
+        const file = input.files[0];
+
+        setStatus(`正在上传：${t.label}...`, "");
+        const pngBlob = await normalizeToPng(file);
+        const filePath = `${gameId}/${t.fileName}`;
+
+        const { error: uploadError } = await supabaseClient.storage
+          .from(BUCKET)
+          .upload(filePath, pngBlob, {
+            contentType: "image/png",
+            cacheControl: "3600",
+            upsert: true
+          });
+
+        if (uploadError) {
+          throw new Error(`${t.label} 上传失败：${uploadError.message}`);
+        }
+
+        const { data } = supabaseClient.storage.from(BUCKET).getPublicUrl(filePath);
+        publicUrls[t.key] = data.publicUrl;
+      }
+
+      // 域名结尾斜杠清理，避免出现 //game.html
+      const cleanBase = baseUrl.replace(/\/+$/, "");
+      shareLink = `${cleanBase}/game.html?gid=${encodeURIComponent(gameId)}`;
+
+      const message = [
+        `分享链接：${shareLink}`,
+        "",
+        `stars: ${publicUrls.stars}`,
+        `hamster: ${publicUrls.hamster}`,
+        `ugly: ${publicUrls.ugly}`,
+        `husband: ${publicUrls.husband}`
+      ].join("\n");
+
+      resultEl.hidden = false;
+      resultEl.textContent = message;
+      copyBtn.disabled = false;
+      setStatus("上传成功，分享链接已生成。", "ok");
+    }
+
+    // 复制分享链接，提高手机端操作效率。
+    async function copyShareLink() {
+      if (!shareLink) return;
+      await navigator.clipboard.writeText(shareLink);
+      setStatus("分享链接已复制。", "ok");
+    }
+
+    // UI 事件绑定。
+    $("regenBtn").addEventListener("click", () => {
+      gameIdEl.value = crypto.randomUUID();
+      setStatus("已生成新的 gameId。", "");
+      resultEl.hidden = true;
+      copyBtn.disabled = true;
+      shareLink = "";
+    });
+
+    $("fillOriginBtn").addEventListener("click", () => {
+      baseUrlEl.value = window.location.origin && window.location.origin !== "null"
+        ? window.location.origin
+        : baseUrlEl.value;
+      setStatus("已填入当前域名。", "");
+    });
+
+    $("uploadBtn").addEventListener("click", async () => {
+      try {
+        await uploadAll();
+      } catch (err) {
+        setStatus(String(err.message || err), "warn");
+      }
+    });
+
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await copyShareLink();
+      } catch (err) {
+        setStatus(`复制失败：${String(err.message || err)}`, "warn");
+      }
+    });
+
+    initPage();
+    bindPreviewEvents();
+  </script>
+</body>
+</html>
