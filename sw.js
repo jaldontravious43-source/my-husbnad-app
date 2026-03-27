@@ -1,5 +1,5 @@
 // 应用壳缓存版本号：每次更新核心文件后请手动 +1，确保新版本生效。
-const CACHE_NAME = "laogongbiepao-shell-v4";
+const CACHE_NAME = "laogongbiepao-shell-v5";
 
 // 仅缓存小体积壳资源；人物图片全部走云端实时请求，不进入 SW 缓存。
 const APP_SHELL = [
