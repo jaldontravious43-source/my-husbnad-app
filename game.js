@@ -18,7 +18,7 @@
   const TYPE_CONFIG = {
     stars: {
       label: "明星帅哥",
-      scale: 0.23,
+      sizePx: 170,
       minSpeed: 70,
       maxSpeed: 115,
       scoreMin: 150,
@@ -28,7 +28,7 @@
     },
     hamster: {
       label: "我的仓鼠",
-      scale: 0.12,
+      sizePx: 92,
       minSpeed: 190,
       maxSpeed: 280,
       scoreMin: 80,
@@ -38,7 +38,7 @@
     },
     ugly: {
       label: "丑男",
-      scale: 0.29,
+      sizePx: 210,
       minSpeed: 35,
       maxSpeed: 65,
       scoreMin: -200,
@@ -48,7 +48,7 @@
     },
     mystery: {
       label: "隐藏问号箱",
-      scale: 0.2,
+      sizePx: 130,
       minSpeed: 230,
       maxSpeed: 350,
       scoreMin: 0,
@@ -58,7 +58,7 @@
     },
     husband: {
       label: "我老公",
-      scale: 0.16,
+      sizePx: 108,
       minSpeed: 330,
       maxSpeed: 460,
       scoreMin: 500,
@@ -78,6 +78,8 @@
   const resultTitleEl = $("result-title");
   const resultTextEl = $("result-text");
   const restartBtn = $("restart-btn");
+  let gameInstance = null;
+  let lastBootData = null;
 
   targetEl.textContent = String(RULES.targetScore);
 
@@ -168,9 +170,35 @@
       this.shotMissed = false;
     }
 
+    launchHook() {
+      if (this.ended) return;
+      if (this.hookState !== "swing") return;
+      this.hookState = "extending";
+      this.shotMissed = false;
+    }
+
     init(data) {
       this.images = data.images;
       this.gid = data.gid;
+      this.targets = [];
+      this.score = 0;
+      this.lives = RULES.lives;
+      this.timeLeft = RULES.roundSeconds;
+      this.ended = false;
+
+      this.ropeLen = 70;
+      this.minRopeLen = 70;
+      this.maxRopeLen = 540;
+      this.hookAngle = -65;
+      this.swingSpeed = 75;
+      this.swingDir = 1;
+      this.hookRadius = 10;
+      this.hookState = "swing";
+      this.extendSpeed = 760;
+      this.retractSpeed = 420;
+      this.currentRetractSpeed = 420;
+      this.caughtTarget = null;
+      this.shotMissed = false;
     }
 
     preload() {
@@ -240,13 +268,9 @@
     }
 
     bindInput() {
-      this.input.on("pointerdown", () => {
-        if (this.ended) return;
-        if (this.hookState !== "swing") return;
-
-        this.hookState = "extending";
-        this.shotMissed = false;
-      });
+      this.input.on("pointerdown", () => this.launchHook());
+      this.input.on("gameobjectdown", () => this.launchHook());
+      this.input.keyboard?.on("keydown-SPACE", () => this.launchHook());
     }
 
     startTimers() {
@@ -297,10 +321,10 @@
       const texture = type === "mystery" ? "mystery_box" : type;
 
       for (let i = 0; i < count; i++) {
-        const pos = this.findSpawnPoint(28);
+        const pos = this.findSpawnPoint(Math.max(42, cfg.sizePx * 0.5));
         const sprite = this.physics.add.image(pos.x, pos.y, texture);
 
-        sprite.setScale(cfg.scale);
+        this.fitSpriteToSize(sprite, cfg.sizePx);
         sprite.setCollideWorldBounds(true);
         sprite.setBounce(1, 1);
 
@@ -319,6 +343,16 @@
       }
     }
 
+    // 统一按目标最大边缩放，避免用户上传超大图片后撑爆画面。
+    fitSpriteToSize(sprite, targetMaxSizePx) {
+      const tw = Math.max(1, sprite.width);
+      const th = Math.max(1, sprite.height);
+      const ratio = targetMaxSizePx / Math.max(tw, th);
+      const safeRatio = Phaser.Math.Clamp(ratio, 0.04, 1.1);
+      sprite.setScale(safeRatio);
+      sprite.setDepth(2);
+    }
+
     findSpawnPoint(pad) {
       const minX = 40;
       const maxX = this.scale.width - 40;
@@ -332,7 +366,8 @@
 
         for (const t of this.targets) {
           if (!t.active) continue;
-          if (Phaser.Math.Distance.Between(x, y, t.x, t.y) < Math.max(pad, t.displayWidth * 0.45)) {
+          const otherPad = Math.max(24, Math.max(t.displayWidth, t.displayHeight) * 0.42);
+          if (Phaser.Math.Distance.Between(x, y, t.x, t.y) < (pad + otherPad)) {
             overlap = true;
             break;
           }
@@ -585,9 +620,20 @@
     });
 
     game.scene.start("GoldHookScene", { images, gid });
+    gameInstance = game;
+    lastBootData = { images, gid };
   }
 
   restartBtn.addEventListener("click", () => {
+    if (gameInstance && lastBootData) {
+      overlayEl.style.display = "none";
+      resultTitleEl.textContent = "";
+      resultTextEl.textContent = "";
+      gameInstance.scene.stop("GoldHookScene");
+      gameInstance.scene.start("GoldHookScene", lastBootData);
+      setMessage("点击任意位置发射钩子");
+      return;
+    }
     window.location.reload();
   });
 
