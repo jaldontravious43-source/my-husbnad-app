@@ -1,9 +1,8 @@
-﻿(() => {
+(() => {
   "use strict";
 
   // ===== 基础配置 =====
   const SUPABASE_URL = "https://bkhccodrqyiesweghhsc.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_vqG9GOJ8TLuhXAhCb2rZ5w_fRTbmSnN";
   const BUCKET = "game-images";
 
   const RULES = {
@@ -11,11 +10,10 @@
     lives: 3,
     targetScore: 1200
   };
+  const IMAGE_FETCH_TIMEOUT_MS = 2600;
 
-  // 使用内联 SVG 作为兜底占位图，避免额外请求，节省内存和网络。
-  const PLACEHOLDER_DATA_URL =
-    "data:image/svg+xml;utf8," +
-    encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="100%" height="100%" fill="#fff2fb"/><text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="#ad4d8a" font-size="36" font-family="sans-serif">图片加载失败</text></svg>');
+  // Phaser 在某些环境对 data: 图片会出现加载兼容问题，这里改为同源静态占位图。
+  const PLACEHOLDER_DATA_URL = "./icons/icon-192.png";
 
   const TYPE_CONFIG = {
     stars: {
@@ -96,49 +94,49 @@
     return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
   }
 
-  // 加载前预检查图片地址是否可用，不可用则回退占位图。
-  function probeImage(url) {
-    return new Promise((resolve) => {
-      const image = new Image();
-      let done = false;
-      const timer = setTimeout(() => {
-        if (done) return;
-        done = true;
-        resolve(false);
-      }, 3500);
-
-      image.onload = () => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        resolve(true);
-      };
-      image.onerror = () => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        resolve(false);
-      };
-
-      image.referrerPolicy = "no-referrer";
-      image.src = `${url}?t=${Date.now()}`;
-    });
-  }
-
-  async function buildImageSources(gid) {
-    const map = {
+  function getPlaceholderMap() {
+    return {
       stars: PLACEHOLDER_DATA_URL,
       hamster: PLACEHOLDER_DATA_URL,
       ugly: PLACEHOLDER_DATA_URL,
       husband: PLACEHOLDER_DATA_URL
     };
+  }
+
+  // 改为 fetch + AbortController 超时下载，避免 Phaser 直接加载远程图时长时间卡住。
+  async function fetchImageSource(url, objectUrls) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(`${url}?t=${Date.now()}`, {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) return PLACEHOLDER_DATA_URL;
+      const blob = await response.blob();
+      if (!blob || !String(blob.type || "").startsWith("image/")) return PLACEHOLDER_DATA_URL;
+
+      const objectUrl = URL.createObjectURL(blob);
+      objectUrls.push(objectUrl);
+      return objectUrl;
+    } catch {
+      clearTimeout(timeoutId);
+      return PLACEHOLDER_DATA_URL;
+    }
+  }
+
+  async function buildImageSources(gid, objectUrls) {
+    const map = getPlaceholderMap();
 
     const keys = ["stars", "hamster", "ugly", "husband"];
-    for (const key of keys) {
+    await Promise.all(keys.map(async (key) => {
       const url = getPublicUrl(`${gid}/${key}.png`);
-      const ok = await probeImage(url);
-      map[key] = ok ? url : PLACEHOLDER_DATA_URL;
-    }
+      map[key] = await fetchImageSource(url, objectUrls);
+    }));
 
     return map;
   }
@@ -546,11 +544,21 @@
       return;
     }
 
-    // 初始化客户端，方便后续扩展读取数据库配置。
-    window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    if (!window.Phaser) {
+      throw new Error("Phaser 引擎加载失败，请刷新后重试。");
+    }
 
     setMessage("正在加载云端图片...");
-    const images = await buildImageSources(gid);
+    const objectUrls = [];
+    const images = await buildImageSources(gid, objectUrls);
+
+    if (Object.values(images).every((v) => v === PLACEHOLDER_DATA_URL)) {
+      setMessage("云图较慢，已使用占位图先开局");
+    }
+
+    window.addEventListener("beforeunload", () => {
+      for (const url of objectUrls) URL.revokeObjectURL(url);
+    }, { once: true });
 
     const game = new Phaser.Game({
       type: Phaser.AUTO,
