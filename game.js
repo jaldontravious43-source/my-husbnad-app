@@ -202,6 +202,12 @@
     }
 
     preload() {
+      // 先加载 4 个本地兜底纹理，确保任何云图失败都不会出现黑绿缺图方块。
+      this.load.image("fallback_stars", PLACEHOLDER_DATA_URL);
+      this.load.image("fallback_hamster", PLACEHOLDER_DATA_URL);
+      this.load.image("fallback_ugly", PLACEHOLDER_DATA_URL);
+      this.load.image("fallback_husband", PLACEHOLDER_DATA_URL);
+
       this.load.image("stars", this.images.stars);
       this.load.image("hamster", this.images.hamster);
       this.load.image("ugly", this.images.ugly);
@@ -318,7 +324,7 @@
 
     spawnTarget(type, count = 1) {
       const cfg = TYPE_CONFIG[type];
-      const texture = type === "mystery" ? "mystery_box" : type;
+      const texture = this.resolveTextureKey(type);
 
       for (let i = 0; i < count; i++) {
         const pos = this.findSpawnPoint(Math.max(42, cfg.sizePx * 0.5));
@@ -341,6 +347,23 @@
 
         this.targets.push(sprite);
       }
+    }
+
+    resolveTextureKey(type) {
+      if (type === "mystery") return "mystery_box";
+      if (this.isTextureUsable(type)) return type;
+      return `fallback_${type}`;
+    }
+
+    isTextureUsable(key) {
+      if (!this.textures.exists(key)) return false;
+      const tex = this.textures.get(key);
+      if (!tex || tex.key === "__MISSING") return false;
+      const src = tex.getSourceImage ? tex.getSourceImage() : null;
+      if (!src) return false;
+      const w = Number(src.width || 0);
+      const h = Number(src.height || 0);
+      return w > 2 && h > 2;
     }
 
     // 统一按目标最大边缩放，避免用户上传超大图片后撑爆画面。
@@ -461,8 +484,7 @@
         this.handleCatchResult(this.caughtTarget);
         this.caughtTarget.destroy();
       } else if (this.shotMissed) {
-        this.lives -= 1;
-        setMessage("空钩惩罚：生命 -1");
+        setMessage("空钩不扣命，继续抓");
       }
 
       this.caughtTarget = null;
@@ -471,15 +493,6 @@
 
       this.refreshHud();
       this.trimTargets();
-
-      if (this.score >= RULES.targetScore) {
-        this.finishGame(true);
-        return;
-      }
-
-      if (this.lives <= 0) {
-        this.finishGame(false);
-      }
     }
 
     handleCatchResult(target) {
@@ -494,10 +507,6 @@
       }
 
       this.score += score;
-      if (type === "ugly") {
-        // 丑男负分之外再扣 1 生命，强化“拖后腿”的惩罚感。
-        this.lives -= 1;
-      }
 
       const sign = score >= 0 ? "+" : "";
       setMessage(`${label} ${sign}${score}`);
